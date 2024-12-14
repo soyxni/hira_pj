@@ -24,88 +24,72 @@ public class CsvToSQL {
 
         Connection connection = null;
         BufferedReader br = null;
-        Statement statement = null;
 
-        try{
-            // Q : try문 밖에다 선언했던 이유...
+        try {
             connection = DriverManager.getConnection(jdbcURL, username, password);
-            br = new BufferedReader(new FileReader(csvFilePath));
+            try (Statement statement = connection.createStatement()) {
+                createDatabase(statement, databaseName);
+            }
 
-            statement = connection.createStatement();
-
-            createDatabase(statement, databaseName);
-
+            // 데이터베이스 선택
             connection.setCatalog(databaseName);
-            createTable(statement, br, tableName);
 
-            br.close(); //닫고 다시 열어서 데이터 삽입
+            // 테이블 생성
             br = new BufferedReader(new FileReader(csvFilePath));
-            br.readLine();
+            createTable(connection, br, tableName);
+
+            // 데이터 삽입
+            br.close();
+            br = new BufferedReader(new FileReader(csvFilePath));
+            br.readLine(); // 헤더 스킵
             insertData(connection, br, tableName);
 
             logger.info("Data 처리 완료");
-        }catch(Exception e){
-            e.printStackTrace();
-        }finally{
-            try{
-                statement.close();
-                connection.close();
-                br.close();
-            }catch (Exception e){
-                e.printStackTrace();
+
+        } catch (Exception e) {
+            logger.error("오류 발생", e);
+        } finally {
+            try {
+                if (connection != null) connection.close();
+                if (br != null) br.close();
+            } catch (Exception e) {
+                logger.error("자원 해제 중 오류 발생", e);
             }
         }
     }
 
+
     //DB 생성
-    private static void createDatabase(Statement statement, String databaseName){ //throws Exception 권장X
+    private static void createDatabase(Statement statement, String databaseName) {
         String createDatabaseSQL = "CREATE DATABASE IF NOT EXISTS " + databaseName;
         try {
             statement.executeUpdate(createDatabaseSQL);
+            logger.info("DB 생성 완료: {}", databaseName);
         } catch (SQLException e) {
-            e.printStackTrace();
-        }finally {
-            try{
-                statement.close();
-            }catch (Exception e){
-                e.printStackTrace();
-            }
+            logger.error("DB 생성 중 오류 발생", e);
         }
-        logger.info("DB 생성 {}", databaseName);
     }
 
-    //테이블 생성
-    private static void createTable(Statement statement, BufferedReader br, String tableName) {
-        String headerLine = null;
-        try {
-            headerLine = br.readLine();
+    private static void createTable(Connection connection, BufferedReader br, String tableName) {
+        try (Statement statement = connection.createStatement()) {
+            String headerLine = br.readLine();
             String[] columns = headerLine.split(",");
             StringBuilder createTableSQL = new StringBuilder("CREATE TABLE IF NOT EXISTS " + tableName + " (");
 
             for (String column : columns) {
-                createTableSQL.append(column.trim()).append(" VARCHAR(255),"); // 모든 컬럼 varchar로 -> 숫자 반영 추가
+                createTableSQL.append(column.trim()).append(" VARCHAR(255),");
             }
-            createTableSQL.deleteCharAt(createTableSQL.length() - 1); // 제일 끝 콤마 제거
+            createTableSQL.deleteCharAt(createTableSQL.length() - 1); // 마지막 콤마 제거
             createTableSQL.append(")");
 
+            logger.info("테이블 생성 쿼리: {}", createTableSQL.toString());
             statement.executeUpdate(createTableSQL.toString());
-            logger.info("Table 생성 {}", tableName);
+            logger.info("Table 생성 완료: {}", tableName);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("CSV 읽기 중 오류 발생", e);
         } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (br != null) br.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                if (statement != null) statement.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+            logger.error("Table 생성 중 오류 발생", e);
         }
     }
 
@@ -116,13 +100,17 @@ public class CsvToSQL {
         try {
             statement = connection.createStatement();
             String line;
+
             while ((line = br.readLine()) != null) {
-                String[] values = line.split(",");
+                String[] values = line.split(",", -1); // 빈 문자열도 포함하기 위해 limit를 -1로 설정
                 StringBuilder insertSQL = new StringBuilder(insertSQLTemplate);
 
-                // 각 값에 대해 처리
                 for (String value : values) {
-                    insertSQL.append("'").append(value.trim().replace("'", "''")).append("',");
+                    if (value.trim().isEmpty()) { // 비어있는 값 처리
+                        insertSQL.append("NULL,");
+                    } else {
+                        insertSQL.append("'").append(value.trim().replace("'", "''")).append("',");
+                    }
                 }
                 insertSQL.deleteCharAt(insertSQL.length() - 1); // 마지막 콤마 제거
                 insertSQL.append(")");
@@ -130,15 +118,16 @@ public class CsvToSQL {
                 try {
                     statement.executeUpdate(insertSQL.toString());
                 } catch (SQLException e) {
-                    e.printStackTrace();
+                    logger.error("데이터 삽입 중 오류 발생: {}", e.getMessage());
                 }
             }
-            logger.info("Table에 Data 삽입 완료: {}", tableName);
+
+            logger.info("Table에 데이터 삽입 완료: {}", tableName);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("CSV 읽기 중 오류 발생", e);
         } catch (SQLException e) {
-            logger.error("Statement 생성 중 오류 발생", e); //SQLException
+            logger.error("Statement 생성 중 오류 발생", e);
         } finally {
             try {
                 if (statement != null) statement.close();
@@ -152,5 +141,6 @@ public class CsvToSQL {
             }
         }
     }
+
 
 }
