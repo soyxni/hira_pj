@@ -53,7 +53,7 @@ public class CsvToSQL {
                 if (connection != null) connection.close();
                 if (br != null) br.close();
             } catch (Exception e) {
-                logger.error("자원 해제 중 오류 발생", e);
+                e.printStackTrace();
             }
         }
     }
@@ -66,7 +66,7 @@ public class CsvToSQL {
             statement.executeUpdate(createDatabaseSQL);
             logger.info("DB 생성 완료: {}", databaseName);
         } catch (SQLException e) {
-            logger.error("DB 생성 중 오류 발생", e);
+            e.printStackTrace();
         }
     }
 
@@ -87,9 +87,9 @@ public class CsvToSQL {
             logger.info("Table 생성 완료: {}", tableName);
 
         } catch (IOException e) {
-            logger.error("CSV 읽기 중 오류 발생", e);
+            e.printStackTrace();
         } catch (SQLException e) {
-            logger.error("Table 생성 중 오류 발생", e);
+            e.printStackTrace();
         }
     }
 
@@ -118,16 +118,16 @@ public class CsvToSQL {
                 try {
                     statement.executeUpdate(insertSQL.toString());
                 } catch (SQLException e) {
-                    logger.error("데이터 삽입 중 오류 발생: {}", e.getMessage());
+                    e.printStackTrace();
                 }
             }
 
             logger.info("Table에 데이터 삽입 완료: {}", tableName);
 
         } catch (IOException e) {
-            logger.error("CSV 읽기 중 오류 발생", e);
+            e.printStackTrace();
         } catch (SQLException e) {
-            logger.error("Statement 생성 중 오류 발생", e);
+            e.printStackTrace();
         } finally {
             try {
                 if (statement != null) statement.close();
